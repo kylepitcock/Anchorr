@@ -11,14 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 
-- **"Send PM when request is available" and channel announcements couldn't be toggled independently** ([#134](https://github.com/openVESSL/Anchorr/issues/134)): Both were computed in one function, and disabling a channel announcement (e.g. for episodes/seasons) used an early return that also silently skipped the DM. Movies and series had no channel-level toggle in the real-time webhook path at all. The DM now always runs independent of the channel-announcement outcome, and new "Announce new movies/series in channel" checkboxes let you turn channel posts off without affecting DMs.
-- **Season and episode notifications showed artwork from an unrelated show** ([#126](https://github.com/openVESSL/Anchorr/issues/126)): Jellyfin gives each season and episode its own TMDB ID, and Anchorr looked that ID up as if it were a TV series, so "The Walking Dead - Season 4" could show the poster of whatever series happens to share that number. Seasons and episodes now resolve their parent series first, on the webhook, polling and WebSocket paths alike. This also fixes "Send PM when request is available" for seasons and episodes, which matched requests against the wrong ID. Thanks to @Lurk390 for the fix.
-- **Duplicate protection for series is now tracked per episode/season**: Already announced episodes, seasons and series are remembered individually, so a quality upgrade never re-announces them, while a new episode of a show you've been notified about before still gets announced. Existing duplicate history carries over on upgrade for items that had their own TMDB ID; others may be announced once more if their file is replaced.
+- **DMs and channel announcements are now independent** ([#134](https://github.com/openVESSL/Anchorr/issues/134)): Turning off a channel announcement no longer also disables "Send PM when request is available". New "Announce new movies/series in channel" checkboxes control channel posts on their own.
+- **Season and episode notifications showed the wrong artwork** ([#126](https://github.com/openVESSL/Anchorr/issues/126)): They now use the parent series, which also fixes "Send PM when request is available" for seasons and episodes. Thanks to @Lurk390.
+- **Smarter duplicate protection for series**: Quality upgrades no longer re-announce episodes or seasons, while new episodes of a known show still get announced.
 
 ### 🔒 Security
 
-- **Coloris (color picker) is now pinned to a fixed version with Subresource Integrity**: The dashboard loaded Coloris from jsDelivr via `@latest`, an unpinned, mutable reference with no integrity check. It's now pinned to `v0.25.0` with SRI hashes on both the script and stylesheet, so the CDN can't silently serve different content than what was reviewed.
-- **Dependencies updated to clear all known advisories**: `npm audit` reported 8 vulnerabilities (2 high, 6 moderate), including prototype pollution in `joi` and request smuggling and CRLF injection in `undici` (pulled in by discord.js). All of them were already fixed in versions the existing version ranges allow, so only the lockfile was stale. Notable bumps: discord.js 14.26.2 to 14.27.0, undici 6.27.0 to 6.29.0, joi 18.2.1 to 18.2.9, express 4.22.2 to 4.22.3. Two later advisories are covered as well: a critical IP-spoofing issue in `proxy-addr` (used by Express to resolve client IPs behind a proxy) and several high-severity issues in `axios`, including redirect-based SSRF and header injection. Bumps: proxy-addr 2.0.7 to 2.0.8, axios 1.19.0 to 1.20.0. No configuration change is needed.
+- **Coloris color picker pinned to `v0.25.0` with Subresource Integrity** instead of loading `@latest` from the CDN.
+- **Dependencies updated** to clear all known advisories (including undici, joi, axios and proxy-addr).
+
+No configuration change is needed.
 
 ---
 
