@@ -569,7 +569,9 @@ function configureWebServer() {
       res.status(200).json({ success: true, message: "Webhook received" });
 
       if (!req.body || Object.keys(req.body).length === 0) {
-        logger.warn("⚠️ Webhook body is empty — check that 'Send All Properties' is enabled in Jellyfin and the webhook is correctly configured");
+        logger.warn(
+          `⚠️ Webhook body is empty (content-type: ${req.headers["content-type"] || "none"}, content-length: ${req.headers["content-length"] || "none"}, user-agent: ${req.headers["user-agent"] || "none"}) — check that 'Send All Properties' is enabled in Jellyfin and the webhook is correctly configured`
+        );
         return;
       }
 
