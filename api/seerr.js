@@ -226,6 +226,45 @@ export async function checkMediaStatus(
   }
 }
 
+// Seerr request status 1/2 = pending/approved; 3 declined, 4 failed, 5 completed
+const OPEN_REQUEST_STATUSES = [1, 2];
+const MEDIA_STATUS_AVAILABLE = 5;
+// A fully available title only counts as "just fulfilled" shortly after Seerr
+// marked it available; older ones are upgrades/re-imports of a finished request.
+const JUST_FULFILLED_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Get a title's requests that are still waiting on fulfilment.
+ * @returns {Promise<Array<{id: string, userId: string|null}>|null>} open requests
+ *   (empty if none or the title is unknown to Seerr), or null if Seerr could not be reached
+ */
+export async function fetchOpenRequests(tmdbId, mediaType, seerrUrl, apiKey) {
+  try {
+    const response = await axios.get(
+      `${normalizeApiUrl(seerrUrl)}/${mediaType === "movie" ? "movie" : "tv"}/${tmdbId}`,
+      { headers: { "X-Api-Key": apiKey }, timeout: TIMEOUTS.SEERR_API }
+    );
+    const mediaInfo = response.data?.mediaInfo;
+    if (
+      mediaInfo?.status === MEDIA_STATUS_AVAILABLE &&
+      mediaInfo.mediaAddedAt &&
+      Date.now() - new Date(mediaInfo.mediaAddedAt).getTime() > JUST_FULFILLED_MS
+    ) {
+      return [];
+    }
+    return (mediaInfo?.requests || [])
+      .filter((r) => r?.id != null && OPEN_REQUEST_STATUSES.includes(r.status))
+      .map((r) => ({
+        id: String(r.id),
+        userId: r.requestedBy?.id != null ? String(r.requestedBy.id) : null,
+      }));
+  } catch (err) {
+    if (err.response?.status === 404) return [];
+    logger.warn(`Could not fetch requests for ${mediaType} ${tmdbId}: ${err?.message || err}`);
+    return null;
+  }
+}
+
 /**
  * Fetch tags from Radarr/Sonarr via Seerr
  * @param {string} seerrUrl - Seerr API URL
