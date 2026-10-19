@@ -106,7 +106,10 @@ async function handleSearchOrRequest(
       getTmdbApiKey()
     );
 
-    if (mode === "request") {
+    // TV shows go through the season picker instead of requesting every season at once
+    const instantRequest = mode === "request" && mediaType !== "tv";
+
+    if (instantRequest) {
       const status = await seerrApi.checkMediaStatus(
         tmdbId,
         mediaType,
@@ -229,7 +232,7 @@ async function handleSearchOrRequest(
       details,
       mediaType,
       imdbId,
-      mode === "request" ? "success" : "search",
+      instantRequest ? "success" : "search",
       omdb,
       tmdbId
     );
@@ -237,9 +240,13 @@ async function handleSearchOrRequest(
     const components = buildButtons(
       tmdbId,
       imdbId,
-      mode === "request",
+      instantRequest,
       mediaType,
-      details
+      details,
+      [],
+      [],
+      [],
+      mediaType === "tv" && mode === "request" ? tags : []
     );
 
     if (mediaType === "movie" && mode === "search") {
