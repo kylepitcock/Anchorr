@@ -227,6 +227,24 @@ export async function checkMediaStatus(
 }
 
 /**
+ * Get the Seerr user IDs that have requested a title.
+ * @returns {Promise<string[]>} Seerr user IDs (empty if none or title unknown)
+ */
+export async function fetchMediaRequesterIds(tmdbId, mediaType, seerrUrl, apiKey) {
+  try {
+    const response = await axios.get(
+      `${normalizeApiUrl(seerrUrl)}/${mediaType === "movie" ? "movie" : "tv"}/${tmdbId}`,
+      { headers: { "X-Api-Key": apiKey }, timeout: TIMEOUTS.SEERR_API }
+    );
+    const requests = response.data?.mediaInfo?.requests || [];
+    return [...new Set(requests.map((r) => r?.requestedBy?.id).filter((id) => id != null).map(String))];
+  } catch (err) {
+    logger.warn(`Could not fetch requesters for ${mediaType} ${tmdbId}: ${err?.message || err}`);
+    return [];
+  }
+}
+
+/**
  * Fetch tags from Radarr/Sonarr via Seerr
  * @param {string} seerrUrl - Seerr API URL
  * @param {string} apiKey - Seerr API key

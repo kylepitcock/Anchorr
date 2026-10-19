@@ -19,8 +19,18 @@ import {
   buildIdentityKey,
 } from "./jellyfin/libraryResolver.js";
 import { PersistentMap } from "./utils/persistentMap.js";
+import { takeRequestChannel } from "./bot/botState.js";
+import { fetchMediaRequesterIds } from "./api/seerr.js";
+import { getUserMappings } from "./utils/configFile.js";
+import { getSeerrApiUrl } from "./utils/seerrUrl.js";
 
 const debouncedSenders = new Map();
+// Titles whose Seerr-derived requesters were already tagged, so repeat
+// notifications (e.g. later episodes) don't ping them again.
+const taggedRequests = new PersistentMap(
+  "tagged-requests",
+  5 * 365 * 24 * 60 * 60 * 1000
+);
 // Persistent so dedup state survives container restarts (otherwise a restart
 // re-notifies anything in the recently-added window via the next poll/WS reconnect).
 const sentNotifications = new PersistentMap(
@@ -194,8 +204,12 @@ async function processAndSendNotification(
   const showButtonWatch = process.env.EMBED_SHOW_BUTTON_WATCH !== "false";
 
   // Check if anyone requested this content
-  const notifyEnabled = process.env.NOTIFY_ON_AVAILABLE === "true";
+  const dmEnabled = process.env.NOTIFY_ON_AVAILABLE === "true";
+  const tagEnabled = process.env.NOTIFY_TAG_REQUESTERS === "true";
+  const notifyEnabled = dmEnabled || tagEnabled;
   let usersToNotify = [];
+  let requestKey = null;
+  let requestChannelId;
 
   if (notifyEnabled && tmdbId && pendingRequests) {
     const movieKey = `${tmdbId}-movie`;
@@ -208,6 +222,8 @@ async function processAndSendNotification(
 
     if (ItemType === "Movie" && pendingRequests.has(movieKey)) {
       usersToNotify = Array.from(pendingRequests.get(movieKey));
+      requestKey = movieKey;
+      requestChannelId = takeRequestChannel(movieKey);
       pendingRequests.delete(movieKey);
       if (onPendingRequestsChanged) onPendingRequestsChanged();
       logger.info(
@@ -220,6 +236,8 @@ async function processAndSendNotification(
       pendingRequests.has(tvKey)
     ) {
       usersToNotify = Array.from(pendingRequests.get(tvKey));
+      requestKey = tvKey;
+      requestChannelId = takeRequestChannel(tvKey);
       pendingRequests.delete(tvKey);
       if (onPendingRequestsChanged) onPendingRequestsChanged();
       logger.info(
@@ -233,6 +251,28 @@ async function processAndSendNotification(
       `Notification check skipped: notifyEnabled=${notifyEnabled}, tmdbId=${tmdbId}, hasPendingRequests=${!!pendingRequests}`
     );
   }
+
+  // Requests made before tagging existed (or outside the bot) aren't tracked
+  // locally, so ask Seerr who requested the title and map them to Discord users.
+  let tagUserIds = usersToNotify;
+  if (tagEnabled && tmdbId) {
+    const mediaType = ItemType === "Movie" ? "movie" : "tv";
+    const seerrKey = `${tmdbId}-${mediaType}`;
+    if (!requestKey && !taggedRequests.has(seerrKey) && process.env.SEERR_URL && process.env.SEERR_API_KEY) {
+      const seerrIds = await fetchMediaRequesterIds(
+        tmdbId,
+        mediaType,
+        getSeerrApiUrl(process.env.SEERR_URL),
+        process.env.SEERR_API_KEY
+      );
+      const discordIds = getUserMappings()
+        .filter((m) => seerrIds.includes(String(m.seerrUserId)))
+        .map((m) => m.discordUserId);
+      tagUserIds = [...new Set([...usersToNotify, ...discordIds])];
+      taggedRequests.set(seerrKey, true);
+    }
+  }
+
   let details = null;
   if (tmdbId) {
     // Check cache first
@@ -709,8 +749,27 @@ async function processAndSendNotification(
   
   logger.info(`${testPrefix}Sent notification for: ${embedTitle}`);
 
+  // Tag requesters in the channel they requested from (falls back to the
+  // channel the notification was posted in)
+  if (tagEnabled && tagUserIds.length > 0) {
+    try {
+      let tagChannel = channel;
+      if (requestChannelId && requestChannelId !== channel.id) {
+        tagChannel = await client.channels.fetch(requestChannelId).catch(() => channel);
+      }
+      const mentions = tagUserIds.map((id) => `<@${id}>`).join(" ");
+      await tagChannel.send({
+        content: `${mentions} ✅ Your request **${embedTitle}** is now available!`,
+        allowedMentions: { users: tagUserIds },
+      });
+      logger.info(`Tagged ${tagUserIds.length} requester(s) for ${embedTitle}`);
+    } catch (err) {
+      logger.error(`Failed to tag requesters for ${embedTitle}:`, err?.message || err);
+    }
+  }
+
   // Send DMs to users who requested this content
-  if (usersToNotify.length > 0) {
+  if (dmEnabled && usersToNotify.length > 0) {
     for (const userId of usersToNotify) {
       try {
         const user = await client.users.fetch(userId);
