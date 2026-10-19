@@ -23,6 +23,7 @@ import { takeRequestChannel } from "./bot/botState.js";
 import { fetchMediaRequesterIds } from "./api/seerr.js";
 import { getUserMappings } from "./utils/configFile.js";
 import { getSeerrApiUrl } from "./utils/seerrUrl.js";
+import { deduplicator } from "./jellyfin/libraryResolver.js";
 
 const debouncedSenders = new Map();
 // Titles whose Seerr-derived requesters were already tagged, so repeat
@@ -860,6 +861,10 @@ export async function handleJellyfinWebhook(req, res, client, pendingRequests, o
 
     // Check if this is a test notification
     const isTestNotification = data.ItemId && (data.ItemId.startsWith("test-") || data.ItemId.startsWith("batch-"));
+
+    // Record real items in the shared seen-items store so the polling fallback
+    // doesn't announce them a second time. Recording only; never skips the webhook.
+    if (!isTestNotification) deduplicator.checkAndRecord(data);
 
     // If no library ID in webhook, use advanced detection (traverse parent chain)
     // Skip library detection for test notifications
