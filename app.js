@@ -37,6 +37,7 @@ import {
   readConfig,
   writeConfig,
   loadConfigToEnv,
+  getUserMappings,
 } from "./utils/configFile.js";
 import { SENSITIVE_FIELDS, isMaskedValue } from "./utils/configSanitize.js";
 
@@ -975,6 +976,76 @@ function configureWebServer() {
       res.status(500).json({
         success: false,
         message: error.message || "Failed to send test notification. Check logs for details.",
+      });
+    }
+  });
+
+  // Test requester tagging - posts the "request available" mention message for a sample title
+  app.post("/api/test-tag-requesters", authenticateToken, async (req, res) => {
+    try {
+      if (!botState.discordClient || !botState.discordClient.isReady()) {
+        return res.status(400).json({
+          success: false,
+          message: "Discord bot is not running. Please start the bot first.",
+        });
+      }
+
+      const channelId = process.env.JELLYFIN_CHANNEL_ID;
+      if (!channelId) {
+        return res.status(400).json({
+          success: false,
+          message: "Notification channel must be configured first.",
+        });
+      }
+
+      // Tag the given user, or the first mapped user if none given
+      const requested = String(req.body?.discordUserId || "").trim();
+      if (requested && !/^\d{15,25}$/.test(requested)) {
+        return res.status(400).json({
+          success: false,
+          message: "Discord user ID must be numeric (enable Developer Mode and copy the user ID).",
+        });
+      }
+      const userId = requested || getUserMappings()[0]?.discordUserId;
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: "Enter a Discord user ID, or add a user mapping to test with.",
+        });
+      }
+
+      const channel = await botState.discordClient.channels.fetch(channelId).catch(() => null);
+      if (!channel) {
+        return res.status(400).json({
+          success: false,
+          message: "Could not access the notification channel. Check the channel ID and bot permissions.",
+        });
+      }
+
+      const { sendRequesterTag } = await import("./jellyfinWebhook.js");
+      const sent = await sendRequesterTag(
+        botState.discordClient,
+        channel,
+        null,
+        [String(userId)],
+        "Interstellar (2014) [TEST]"
+      );
+      if (!sent) {
+        return res.status(500).json({
+          success: false,
+          message: "Failed to send the tag message. Check that the bot can send messages in the channel.",
+        });
+      }
+
+      res.json({
+        success: true,
+        message: `Test tag sent for user ID ${userId}. Check your Discord channel for the mention.`,
+      });
+    } catch (error) {
+      logger.error("Failed to send test tag:", error);
+      res.status(500).json({
+        success: false,
+        message: error.message || "Failed to send test tag. Check logs for details.",
       });
     }
   });

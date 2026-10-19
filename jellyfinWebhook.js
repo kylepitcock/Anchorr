@@ -918,7 +918,7 @@ async function sendRequesterTag(client, channel, requestChannelId, userIds, embe
   }
 }
 
-export { processAndSendNotification, libraryCache };
+export { processAndSendNotification, sendRequesterTag, libraryCache };
 
 export async function handleJellyfinWebhook(req, res, client, pendingRequests, onPendingRequestsChanged) {
   try {

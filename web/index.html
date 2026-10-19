@@ -805,6 +805,16 @@
                           </button>
                         </div>
                         
+                        <div class="form-text" style="margin: 1.5rem 0 0.5rem;" data-i18n="config.test_tag_requesters_help">
+                          Test requester tagging: posts the "request is available" mention for a sample title in the notification channel. Leave the user ID empty to tag the first mapped user.
+                        </div>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                          <input type="text" id="test-tag-user-id" placeholder="Discord user ID (optional)" style="flex: 1; min-width: 200px;" />
+                          <button type="button" id="test-tag-requesters-btn" class="btn btn-secondary" style="padding: 0.75rem 1rem; margin: 0; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                            <i class="bi bi-at"></i> <span data-i18n="config.test_tag_requesters">Test Requester Tag</span>
+                          </button>
+                        </div>
+
                         <div id="test-notification-status" style="margin-top: 1rem;"></div>
                       </div>
                     </fieldset>

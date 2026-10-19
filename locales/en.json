@@ -139,6 +139,8 @@
     "test_batch_seasons_notification": "Test Seasons Batch",
     "test_episodes_notification": "Test Episodes",
     "test_batch_episodes_notification": "Test Episodes Batch",
+    "test_tag_requesters": "Test Requester Tag",
+    "test_tag_requesters_help": "Test requester tagging: posts the \"request is available\" mention for a sample title in the notification channel. Leave the user ID empty to tag the first mapped user.",
     "save_button": "Save Settings",
     "debounce_title": "Episode Notification Debounce",
     "debounce_unit": "seconds",
