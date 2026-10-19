@@ -19,6 +19,8 @@ import {
   buildIdentityKey,
 } from "./jellyfin/libraryResolver.js";
 import { PersistentMap } from "./utils/persistentMap.js";
+import { isMediaRequested } from "./api/seerr.js";
+import { getSeerrApiUrl } from "./utils/seerrUrl.js";
 
 const debouncedSenders = new Map();
 // Persistent so dedup state survives container restarts (otherwise a restart
@@ -233,6 +235,27 @@ async function processAndSendNotification(
       `Notification check skipped: notifyEnabled=${notifyEnabled}, tmdbId=${tmdbId}, hasPendingRequests=${!!pendingRequests}`
     );
   }
+
+  // Optionally skip titles nobody requested. Seerr is the source of truth (a
+  // series stays "requested" after its pending entry is consumed). If Seerr
+  // can't be reached or the title can't be identified, send the notification.
+  if (process.env.JELLYFIN_ONLY_REQUESTED === "true" && !isTestNotif && tmdbId) {
+    let requested = usersToNotify.length > 0;
+    if (!requested && process.env.SEERR_URL && process.env.SEERR_API_KEY) {
+      const result = await isMediaRequested(
+        tmdbId,
+        ItemType === "Movie" ? "movie" : "tv",
+        getSeerrApiUrl(process.env.SEERR_URL),
+        process.env.SEERR_API_KEY
+      );
+      requested = result !== false;
+    }
+    if (!requested) {
+      logger.info(`Skipping notification for ${data.SeriesName || Name} (${ItemType}): not requested by a user (JELLYFIN_ONLY_REQUESTED)`);
+      return;
+    }
+  }
+
   let details = null;
   if (tmdbId) {
     // Check cache first

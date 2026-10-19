@@ -911,6 +911,16 @@
 
                       <div class="form-group" style="margin-top: 1.5rem;">
                         <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                          <input type="checkbox" id="JELLYFIN_ONLY_REQUESTED" name="JELLYFIN_ONLY_REQUESTED" />
+                          <span data-i18n="config.jellyfin_only_requested_label">Only notify for requested media</span>
+                        </label>
+                        <div class="form-text" data-i18n="config.jellyfin_only_requested_help">
+                          When enabled, new media in Jellyfin is only announced in the channel if someone requested it (checked against Seerr). Everything else is skipped. If Seerr can't be reached, the notification is sent anyway.
+                        </div>
+                      </div>
+
+                      <div class="form-group" style="margin-top: 1.5rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                           <input type="checkbox" id="NOTIFY_ON_AVAILABLE" name="NOTIFY_ON_AVAILABLE" />
                           <span data-i18n="config.notify_on_available_label">Send PM when request is available</span>
                         </label>

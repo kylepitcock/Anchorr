@@ -193,6 +193,8 @@
     "auto_start_help": "If enabled, the bot starts automatically when the container/server restarts and valid Discord credentials are present.",
     "notify_on_available_label": "Send PM when request is available",
     "notify_on_available_help": "When enabled, users will receive a private message when their requested content becomes available on Jellyfin.",
+    "jellyfin_only_requested_label": "Only notify for requested media",
+    "jellyfin_only_requested_help": "When enabled, new media in Jellyfin is only announced in the channel if someone requested it (checked against Seerr). Everything else is skipped. If Seerr can't be reached, the notification is sent anyway.",
     "ephemeral_mode_label": "Ephemeral Message Mode",
     "ephemeral_mode_help": "When enabled, all bot responses are sent as ephemeral messages (only visible to the user who used the command). When disabled, successful results are visible to everyone in the channel.",
     "auto_approve_label": "Seerr Auto-Approve Requests",

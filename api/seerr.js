@@ -227,6 +227,23 @@ export async function checkMediaStatus(
 }
 
 /**
+ * Whether a title has been requested in Seerr (by anyone).
+ * @returns {Promise<boolean|null>} true/false, or null if Seerr could not be reached
+ */
+export async function isMediaRequested(tmdbId, mediaType, seerrUrl, apiKey) {
+  try {
+    const response = await axios.get(
+      `${normalizeApiUrl(seerrUrl)}/${mediaType === "movie" ? "movie" : "tv"}/${tmdbId}`,
+      { headers: { "X-Api-Key": apiKey }, timeout: TIMEOUTS.SEERR_API }
+    );
+    return (response.data?.mediaInfo?.requests || []).length > 0;
+  } catch (err) {
+    logger.warn(`Could not check requests for ${mediaType} ${tmdbId}: ${err?.message || err}`);
+    return null;
+  }
+}
+
+/**
  * Fetch tags from Radarr/Sonarr via Seerr
  * @param {string} seerrUrl - Seerr API URL
  * @param {string} apiKey - Seerr API key

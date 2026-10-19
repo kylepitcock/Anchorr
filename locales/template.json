@@ -193,6 +193,8 @@
     "auto_start_help": "",
     "notify_on_available_label": "",
     "notify_on_available_help": "",
+    "jellyfin_only_requested_label": "",
+    "jellyfin_only_requested_help": "",
     "ephemeral_mode_label": "",
     "ephemeral_mode_help": "",
     "auto_approve_label": "",
