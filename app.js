@@ -1050,6 +1050,158 @@ function configureWebServer() {
     }
   });
 
+  // Full workflow test: Jellyfin reachable -> media present -> webhook endpoint -> requester notified
+  app.post("/api/test-workflow", authenticateToken, async (req, res) => {
+    const steps = [];
+    const step = (name, ok, message) => steps.push({ name, ok, message });
+
+    try {
+      const tmdbId = String(req.body?.tmdbId || "").trim();
+      const mediaType = req.body?.mediaType === "tv" ? "tv" : "movie";
+      const requested = String(req.body?.discordUserId || "").trim();
+
+      if (!/^\d+$/.test(tmdbId)) {
+        return res.status(400).json({ success: false, message: "Enter the numeric TMDB ID of the title to test with." });
+      }
+      if (requested && !/^\d{15,25}$/.test(requested)) {
+        return res.status(400).json({ success: false, message: "Discord user ID must be numeric." });
+      }
+
+      // 1. Jellyfin reachable with the configured API key
+      const jfUrl = process.env.JELLYFIN_BASE_URL;
+      const jfKey = process.env.JELLYFIN_API_KEY;
+      const jellyfinApi = await import("./api/jellyfin.js");
+      let jellyfinOk = false;
+      if (!jfUrl || !jfKey) {
+        step("Jellyfin connection", false, "JELLYFIN_BASE_URL or JELLYFIN_API_KEY is not configured.");
+      } else {
+        try {
+          const infoUrl = new URL(jfUrl);
+          infoUrl.pathname = infoUrl.pathname.replace(/\/$/, "") + "/System/Info";
+          const { default: axios } = await import("axios");
+          const info = await axios.get(infoUrl.href, {
+            headers: jellyfinApi.jellyfinAuthHeaders(jfKey),
+            timeout: 5000,
+          });
+          jellyfinOk = true;
+          step("Jellyfin connection", true, `Connected to ${info.data?.ServerName || "Jellyfin"} ${info.data?.Version || ""}`.trim());
+        } catch (err) {
+          const status = err?.response?.status;
+          step(
+            "Jellyfin connection",
+            false,
+            status === 401 || status === 403
+              ? `Jellyfin rejected the API key (HTTP ${status}).`
+              : `Could not reach ${jfUrl}: ${err?.message || err}. If Anchorr runs in Docker, localhost won't work — use the server's LAN IP.`
+          );
+        }
+      }
+
+      // 2. Media has been added to Jellyfin
+      if (!jellyfinOk) {
+        step("Media in Jellyfin", false, "Skipped — Jellyfin is not reachable.");
+      } else {
+        const itemId = await jellyfinApi.findItemByTmdbId(tmdbId, mediaType, jfKey, jfUrl);
+        step(
+          "Media in Jellyfin",
+          !!itemId,
+          itemId
+            ? `Found TMDB ${tmdbId} in your Jellyfin library (item ${itemId}).`
+            : `TMDB ${tmdbId} (${mediaType}) is not in Jellyfin yet. It may still be downloading or scanning, or it has no TMDB metadata match.`
+        );
+      }
+
+      // 2b. Webhook endpoint accepts the secret (called locally; proves auth works, not that Jellyfin can reach Anchorr)
+      const { WEBHOOK_SECRET } = await import("./utils/auth.js");
+      const hookUrl = `http://127.0.0.1:${process.env.WEBHOOK_PORT || 8282}/jellyfin-webhook`;
+      try {
+        const post = (headers) =>
+          fetch(hookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...headers },
+            body: "{}",
+            signal: AbortSignal.timeout(5000),
+          });
+        const noSecret = await post({});
+        const withSecret = await post({ "X-Webhook-Secret": WEBHOOK_SECRET });
+        step(
+          "Webhook endpoint",
+          noSecret.status === 401 && withSecret.status === 200,
+          noSecret.status === 401 && withSecret.status === 200
+            ? "Endpoint rejects requests without the secret and accepts the correct one. In Jellyfin, make sure the webhook sends this secret in an X-Webhook-Secret header with Send All Properties enabled."
+            : `Unexpected responses (no secret: ${noSecret.status}, with secret: ${withSecret.status}).`
+        );
+      } catch (err) {
+        step("Webhook endpoint", false, `Could not call ${hookUrl}: ${err?.message || err}`);
+      }
+
+      // 3. Requester is notified
+      if (!botState.discordClient || !botState.discordClient.isReady()) {
+        step("Requester notification", false, "Discord bot is not running.");
+      } else if (!process.env.JELLYFIN_CHANNEL_ID) {
+        step("Requester notification", false, "Notification channel is not configured.");
+      } else if (process.env.NOTIFY_ON_AVAILABLE !== "true" && process.env.NOTIFY_TAG_REQUESTERS !== "true") {
+        step("Requester notification", false, "Neither 'Send PM when request is available' nor 'Tag requesters in channel' is enabled.");
+      } else {
+        const userId = requested || getUserMappings()[0]?.discordUserId;
+        const key = `${tmdbId}-${mediaType}`;
+        if (!userId) {
+          step("Requester notification", false, "Enter a Discord user ID, or add a user mapping to test with.");
+        } else if (pendingRequests.has(key)) {
+          step("Requester notification", false, `A real pending request exists for ${key}; testing would consume it. Pick a different title.`);
+        } else {
+          const { tmdbGetDetails, tmdbGetExternalImdb } = await import("./api/tmdb.js");
+          const details = await tmdbGetDetails(tmdbId, mediaType, process.env.TMDB_API_KEY);
+          const imdbId = await tmdbGetExternalImdb(tmdbId, mediaType, process.env.TMDB_API_KEY);
+          const data = {
+            ItemType: mediaType === "movie" ? "Movie" : "Series",
+            Name: mediaType === "movie" ? details.title : details.name,
+            Year: ((mediaType === "movie" ? details.release_date : details.first_air_date) || "").split("-")[0],
+            Overview: details.overview,
+            Provider_tmdb: tmdbId,
+            Provider_imdb: imdbId,
+            ServerUrl: process.env.JELLYFIN_BASE_URL || "https://jellyfin.example.com",
+            ServerId: process.env.JELLYFIN_SERVER_ID || "test-server-id",
+            ItemId: "test-workflow-" + Date.now(),
+          };
+
+          // Register the user as a requester in memory only (not persisted), then run the real send path
+          pendingRequests.set(key, new Set([String(userId)]));
+          let result;
+          try {
+            const { processAndSendNotification } = await import("./jellyfinWebhook.js");
+            result = await processAndSendNotification(
+              data,
+              botState.discordClient,
+              pendingRequests,
+              process.env.JELLYFIN_CHANNEL_ID,
+              0, null, 0, null,
+              true
+            );
+          } finally {
+            pendingRequests.delete(key);
+          }
+
+          const parts = [];
+          if (result?.tagEnabled) parts.push(result.tagged ? "mention posted in channel" : "mention FAILED");
+          if (result?.dmEnabled) parts.push(result.dmsSent > 0 ? "DM sent" : "DM FAILED (user may have DMs closed)");
+          const ok = !!result && (result.tagEnabled ? result.tagged : true) && (result.dmEnabled ? result.dmsSent > 0 : true);
+          step(
+            "Requester notification",
+            ok,
+            result ? `${data.Name} test for user ${userId}: ${parts.join(", ")}.` : "Notification was not sent. Check logs."
+          );
+        }
+      }
+
+      res.json({ success: steps.every((x) => x.ok), steps });
+    } catch (error) {
+      logger.error("Failed to run workflow test:", error);
+      steps.push({ name: "Workflow test", ok: false, message: error.message || "Unexpected error. Check logs." });
+      res.status(500).json({ success: false, steps });
+    }
+  });
+
   // Test random pick endpoint - sends a sample random pick
   app.post("/api/test-random-pick", authenticateToken, async (_req, res) => {
     try {

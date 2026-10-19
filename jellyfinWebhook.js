@@ -836,6 +836,7 @@ async function processAndSendNotification(
   }
 
   // DMs are independent of the channel-announcement toggles above.
+  let dmsSent = 0;
   if (dmEnabled && usersToNotify.length > 0) {
     for (const userId of usersToNotify) {
       try {
@@ -884,6 +885,7 @@ async function processAndSendNotification(
         }
         await user.send(messageOptions);
         logger.info(`Sent DM notification to user ${userId} for ${embedTitle}`);
+        dmsSent++;
       } catch (err) {
         logger.error(
           `Failed to send DM to user ${userId}:`,
@@ -892,6 +894,8 @@ async function processAndSendNotification(
       }
     }
   }
+
+  return { requesters: usersToNotify.length, tagged, dmsSent, tagEnabled, dmEnabled };
 }
 
 /**

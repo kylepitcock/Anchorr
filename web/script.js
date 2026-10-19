@@ -1339,6 +1339,43 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  const testWorkflowBtn = document.getElementById("test-workflow-btn");
+  if (testWorkflowBtn) {
+    testWorkflowBtn.addEventListener("click", async () => {
+      const statusEl = testNotificationStatus;
+      if (!statusEl) return;
+
+      statusEl.textContent = "Running workflow test...";
+      statusEl.style.color = "var(--text)";
+
+      try {
+        const response = await fetch("/api/test-workflow", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tmdbId: document.getElementById("test-workflow-tmdb-id")?.value.trim(),
+            mediaType: document.getElementById("test-workflow-media-type")?.value,
+            discordUserId: document.getElementById("test-workflow-user-id")?.value.trim(),
+          }),
+        });
+        const result = await response.json();
+        if (!Array.isArray(result.steps)) throw new Error(result.message || "Workflow test failed");
+
+        statusEl.textContent = "";
+        statusEl.style.color = "var(--text)";
+        result.steps.forEach((s) => {
+          const line = document.createElement("div");
+          line.textContent = `${s.ok ? "✅" : "❌"} ${s.name}: ${s.message}`;
+          line.style.color = s.ok ? "var(--green)" : "#f38ba8";
+          statusEl.appendChild(line);
+        });
+      } catch (error) {
+        statusEl.textContent = error.message || "Failed to run workflow test";
+        statusEl.style.color = "#f38ba8"; // Red
+      }
+    });
+  }
+
   // Test Random Pick Button
   const testRandomPickBtn = document.getElementById("test-random-pick-btn");
   if (testRandomPickBtn) {
