@@ -24,6 +24,24 @@ const getSeerrUrl = () => getSeerrApiUrl(process.env.SEERR_URL || "");
 const getSeerrApiKey = () => process.env.SEERR_API_KEY;
 const getTmdbApiKey = () => process.env.TMDB_API_KEY;
 
+// Server/quality picked in /request for a TV show, held until the user presses the
+// season Request button (customIds are too small to carry them). Keyed by user + show;
+// lost on restart, in which case the defaults apply.
+const PENDING_OPTIONS_TTL_MS = 60 * 60 * 1000;
+const pendingRequestOptions = new Map();
+
+function pendingOptionsKey(userId, tmdbId) {
+  return `${userId}|${tmdbId}`;
+}
+
+function takePendingOptions(userId, tmdbId) {
+  const key = pendingOptionsKey(userId, tmdbId);
+  const entry = pendingRequestOptions.get(key);
+  pendingRequestOptions.delete(key);
+  if (!entry || Date.now() - entry.timestamp > PENDING_OPTIONS_TTL_MS) return {};
+  return entry.options;
+}
+
 // Returns a user-facing error message for a failed Seerr request.
 function getSeerrErrorMessage(err) {
   if (err.response) {
@@ -236,6 +254,21 @@ async function handleSearchOrRequest(
       omdb,
       tmdbId
     );
+
+    if (
+      mode === "request" &&
+      mediaType === "tv" &&
+      (options.server || options.quality)
+    ) {
+      const now = Date.now();
+      for (const [k, v] of pendingRequestOptions) {
+        if (now - v.timestamp > PENDING_OPTIONS_TTL_MS) pendingRequestOptions.delete(k);
+      }
+      pendingRequestOptions.set(pendingOptionsKey(interaction.user.id, tmdbId), {
+        options: { server: options.server, quality: options.quality },
+        timestamp: now,
+      });
+    }
 
     const components = buildButtons(
       tmdbId,
@@ -719,7 +752,7 @@ export function registerInteractions(client) {
           if (isAnime) logger.info(`[REQUEST BTN] Detected anime content: ${tmdbId}`);
 
           const { profileId, serverId } = parseQualityAndServerOptions(
-            {},
+            takePendingOptions(interaction.user.id, tmdbId),
             mediaType,
             isAnime
           );
