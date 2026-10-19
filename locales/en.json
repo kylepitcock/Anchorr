@@ -141,6 +141,8 @@
     "test_batch_episodes_notification": "Test Episodes Batch",
     "test_tag_requesters": "Test Requester Tag",
     "test_tag_requesters_help": "Test requester tagging: posts the \"request is available\" mention for a sample title in the notification channel. Leave the user ID empty to tag the first mapped user.",
+    "test_workflow": "Run Workflow Test",
+    "test_workflow_help": "Full workflow test: checks Jellyfin is reachable, that a title is in your Jellyfin library, that the webhook endpoint accepts your secret, and that a requester is notified (PM and/or channel tag, per your settings).",
     "save_button": "Save Settings",
     "debounce_title": "Episode Notification Debounce",
     "debounce_unit": "seconds",

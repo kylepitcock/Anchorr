@@ -141,6 +141,8 @@
     "test_batch_episodes_notification": "",
     "test_tag_requesters": "",
     "test_tag_requesters_help": "",
+    "test_workflow": "",
+    "test_workflow_help": "",
     "save_button": "",
     "debounce_title": "",
     "debounce_unit": "",
