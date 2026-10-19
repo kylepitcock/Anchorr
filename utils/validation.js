@@ -48,6 +48,7 @@ export const configSchema = Joi.object({
   AUTO_START_BOT: Joi.string().valid("true", "false").optional(),
   NOTIFY_ON_AVAILABLE: Joi.string().valid("true", "false").optional(),
   NOTIFY_TAG_REQUESTERS: Joi.string().valid("true", "false").optional(),
+  JELLYFIN_POLLING_ENABLED: Joi.string().valid("true", "false").optional(),
   PRIVATE_MESSAGE_MODE: Joi.string().valid("true", "false").optional(),
   SEERR_AUTO_APPROVE: Joi.string().valid("true", "false").optional(),
   DEBUG: Joi.string().valid("true", "false").optional(),
