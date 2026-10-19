@@ -1312,6 +1312,33 @@ document.addEventListener("DOMContentLoaded", async () => {
     testBatchEpisodesBtn.addEventListener("click", () => sendTestNotification("batch-episodes"));
   }
 
+  const testTagRequestersBtn = document.getElementById("test-tag-requesters-btn");
+  if (testTagRequestersBtn) {
+    testTagRequestersBtn.addEventListener("click", async () => {
+      const statusEl = testNotificationStatus;
+      if (!statusEl) return;
+      const discordUserId = document.getElementById("test-tag-user-id")?.value.trim();
+
+      statusEl.textContent = "Sending test requester tag...";
+      statusEl.style.color = "var(--text)";
+
+      try {
+        const response = await fetch("/api/test-tag-requesters", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ discordUserId }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || "Failed to send test tag");
+        statusEl.textContent = result.message;
+        statusEl.style.color = "var(--green)";
+      } catch (error) {
+        statusEl.textContent = error.message || "Failed to send test tag";
+        statusEl.style.color = "#f38ba8"; // Red
+      }
+    });
+  }
+
   // Test Random Pick Button
   const testRandomPickBtn = document.getElementById("test-random-pick-btn");
   if (testRandomPickBtn) {

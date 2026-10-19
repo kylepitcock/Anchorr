@@ -752,20 +752,7 @@ async function processAndSendNotification(
   // Tag requesters in the channel they requested from (falls back to the
   // channel the notification was posted in)
   if (tagEnabled && tagUserIds.length > 0) {
-    try {
-      let tagChannel = channel;
-      if (requestChannelId && requestChannelId !== channel.id) {
-        tagChannel = await client.channels.fetch(requestChannelId).catch(() => channel);
-      }
-      const mentions = tagUserIds.map((id) => `<@${id}>`).join(" ");
-      await tagChannel.send({
-        content: `${mentions} ✅ Your request **${embedTitle}** is now available!`,
-        allowedMentions: { users: tagUserIds },
-      });
-      logger.info(`Tagged ${tagUserIds.length} requester(s) for ${embedTitle}`);
-    } catch (err) {
-      logger.error(`Failed to tag requesters for ${embedTitle}:`, err?.message || err);
-    }
+    await sendRequesterTag(client, channel, requestChannelId, tagUserIds, embedTitle);
   }
 
   // Send DMs to users who requested this content
@@ -827,7 +814,31 @@ async function processAndSendNotification(
   }
 }
 
-export { processAndSendNotification, libraryCache };
+/**
+ * Post the public "your request is available" message that @mentions requesters.
+ * Shared by real notifications and the dashboard's tag test.
+ * @returns {Promise<boolean>} whether the message was sent
+ */
+async function sendRequesterTag(client, channel, requestChannelId, userIds, embedTitle) {
+  try {
+    let tagChannel = channel;
+    if (requestChannelId && requestChannelId !== channel.id) {
+      tagChannel = await client.channels.fetch(requestChannelId).catch(() => channel);
+    }
+    const mentions = userIds.map((id) => `<@${id}>`).join(" ");
+    await tagChannel.send({
+      content: `${mentions} ✅ Your request **${embedTitle}** is now available!`,
+      allowedMentions: { users: userIds },
+    });
+    logger.info(`Tagged ${userIds.length} requester(s) for ${embedTitle}`);
+    return true;
+  } catch (err) {
+    logger.error(`Failed to tag requesters for ${embedTitle}:`, err?.message || err);
+    return false;
+  }
+}
+
+export { processAndSendNotification, sendRequesterTag, libraryCache };
 
 export async function handleJellyfinWebhook(req, res, client, pendingRequests, onPendingRequestsChanged) {
   try {
