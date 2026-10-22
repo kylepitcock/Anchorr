@@ -146,6 +146,27 @@ function cleanTitle(title) {
     .trim();
 }
 
+// Jellyfin series id -> the show's TMDB id (episodes/seasons only carry their own)
+const seriesTmdbCache = new Map();
+
+async function resolveSeriesTmdbId(seriesId) {
+  if (!seriesId) return null;
+  if (seriesTmdbCache.has(seriesId)) return seriesTmdbCache.get(seriesId);
+  const apiKey = process.env.JELLYFIN_API_KEY;
+  const baseUrl = process.env.JELLYFIN_BASE_URL;
+  if (!apiKey || !baseUrl) return null;
+  try {
+    const { fetchItemDetails } = await import("./api/jellyfin.js");
+    const series = await fetchItemDetails(seriesId, apiKey, baseUrl);
+    const tmdb = series?.ProviderIds?.Tmdb || null;
+    if (tmdb) seriesTmdbCache.set(seriesId, tmdb);
+    return tmdb;
+  } catch (err) {
+    logger.warn(`Could not resolve series TMDB id for ${seriesId}: ${err?.message || err}`);
+    return null;
+  }
+}
+
 async function processAndSendNotification(
   data,
   client,
@@ -256,15 +277,24 @@ async function processAndSendNotification(
   // Optionally skip titles nobody requested. Seerr is the source of truth (a
   // series stays "requested" after its pending entry is consumed). If Seerr
   // can't be reached or the title can't be identified, send the notification.
-  if (process.env.JELLYFIN_ONLY_REQUESTED === "true" && !isTestNotif && tmdbId) {
+  if (process.env.JELLYFIN_ONLY_REQUESTED === "true" && !isTestNotif) {
+    const isShowPart = ItemType === "Episode" || ItemType === "Season";
+    // An episode's/season's own Provider_tmdb is not the show's TMDB id, so
+    // resolve the show's id from its Jellyfin series item.
+    const checkTmdbId = isShowPart ? await resolveSeriesTmdbId(SeriesId) : tmdbId;
     let requested = usersToNotify.length > 0;
-    if (!requested && process.env.SEERR_URL && process.env.SEERR_API_KEY) {
+
+    if (!requested && !checkTmdbId) {
+      logger.warn(`[ONLY_REQUESTED] Could not identify TMDB id for ${data.SeriesName || Name} (${ItemType}); sending notification`);
+      requested = true;
+    } else if (!requested && process.env.SEERR_URL && process.env.SEERR_API_KEY) {
       const result = await isMediaRequested(
-        tmdbId,
+        checkTmdbId,
         ItemType === "Movie" ? "movie" : "tv",
         getSeerrApiUrl(process.env.SEERR_URL),
         process.env.SEERR_API_KEY
       );
+      logger.info(`[ONLY_REQUESTED] ${data.SeriesName || Name} (${ItemType}, tmdb ${checkTmdbId}): requested=${result}`);
       requested = result !== false;
     }
     if (!requested) {
