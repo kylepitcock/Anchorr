@@ -6,6 +6,7 @@ import { buildNotificationEmbed, buildButtons } from "./embeds.js";
 import {
   getOptionStringRobust,
   parseQualityAndServerOptions,
+  withUserQuality,
   checkRolePermission,
   getSeerrAutoApprove,
 } from "./botUtils.js";
@@ -187,7 +188,7 @@ async function handleSearchOrRequest(
       if (isAnime) logger.info(`[REQUEST] Detected anime content: ${tmdbId}`);
 
       const { profileId, serverId } = parseQualityAndServerOptions(
-        options,
+        withUserQuality(options, interaction.user.id, mediaType),
         mediaType,
         isAnime
       );
@@ -741,7 +742,11 @@ export function registerInteractions(client) {
           if (isAnime) logger.info(`[REQUEST BTN] Detected anime content: ${tmdbId}`);
 
           const { profileId, serverId } = parseQualityAndServerOptions(
-            takePendingOptions(interaction.user.id, tmdbId),
+            withUserQuality(
+              takePendingOptions(interaction.user.id, tmdbId),
+              interaction.user.id,
+              mediaType
+            ),
             mediaType,
             isAnime
           );
@@ -1094,7 +1099,7 @@ export function registerInteractions(client) {
           );
 
           const { profileId, serverId } = parseQualityAndServerOptions(
-            {},
+            withUserQuality({}, interaction.user.id, mediaType),
             mediaType
           );
 
