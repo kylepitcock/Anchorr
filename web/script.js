@@ -2640,7 +2640,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         <select class="mapping-quality-select" data-discord-id="${escapeHtml(
           mapping.discordUserId
         )}" data-media-type="${mediaType}" style="min-width: 160px; margin-top: 0.2rem;">
-          <option value="">Default</option>
+          <option value="">${escapeHtml(t('user_mapping.quality_default'))}</option>
           ${options}
         </select>
       </label>`;
@@ -2712,8 +2712,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             </div>
           </div>
           <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-            ${qualitySelectHtml(mapping, "movie", "radarr", "Movie quality")}
-            ${qualitySelectHtml(mapping, "tv", "sonarr", "TV quality")}
+            ${qualitySelectHtml(mapping, "movie", "radarr", t('user_mapping.quality_movie'))}
+            ${qualitySelectHtml(mapping, "tv", "sonarr", t('user_mapping.quality_tv'))}
             <button class="btn btn-danger btn-sm" onclick="deleteMapping('${
               escapeHtml(mapping.discordUserId)
             }')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
@@ -2743,13 +2743,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         );
         const result = await response.json();
         if (!response.ok || !result.success) {
-          throw new Error(result.message || "Failed to save quality profile");
+          throw new Error(result.message || t('user_mapping.quality_save_failed'));
         }
         const mapping = currentMappings.find((m) => m.discordUserId === discordId);
         if (mapping) mapping.qualityProfiles = result.qualityProfiles;
-        showToast("Quality profile saved");
+        showToast(t('user_mapping.quality_saved'));
       } catch (error) {
-        showToast(error.message || "Failed to save quality profile");
+        showToast(error.message || t('user_mapping.quality_save_failed'));
         await loadMappings();
       }
     });
