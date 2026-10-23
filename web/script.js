@@ -1319,7 +1319,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!statusEl) return;
       const discordUserId = document.getElementById("test-tag-user-id")?.value.trim();
 
-      statusEl.textContent = "Sending test requester tag...";
+      statusEl.textContent = t('config.test_tag_sending');
       statusEl.style.color = "var(--text)";
 
       try {
@@ -1333,7 +1333,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         statusEl.textContent = result.message;
         statusEl.style.color = "var(--green)";
       } catch (error) {
-        statusEl.textContent = error.message || "Failed to send test tag";
+        statusEl.textContent = error.message || t('config.test_tag_failed');
         statusEl.style.color = "#f38ba8"; // Red
       }
     });
@@ -1345,7 +1345,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const statusEl = testNotificationStatus;
       if (!statusEl) return;
 
-      statusEl.textContent = "Running workflow test...";
+      statusEl.textContent = t('config.test_workflow_running');
       statusEl.style.color = "var(--text)";
 
       try {
@@ -1370,7 +1370,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           statusEl.appendChild(line);
         });
       } catch (error) {
-        statusEl.textContent = error.message || "Failed to run workflow test";
+        statusEl.textContent = error.message || t('config.test_workflow_failed');
         statusEl.style.color = "#f38ba8"; // Red
       }
     });

@@ -809,7 +809,7 @@
                           Test requester tagging: posts the "request is available" mention for a sample title in the notification channel. Leave the user ID empty to tag the first mapped user.
                         </div>
                         <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                          <input type="text" id="test-tag-user-id" placeholder="Discord user ID (optional)" style="flex: 1; min-width: 200px;" />
+                          <input type="text" id="test-tag-user-id" placeholder="Discord user ID (optional)" data-i18n="config.test_user_id_placeholder" data-i18n-attr="placeholder" style="flex: 1; min-width: 200px;" />
                           <button type="button" id="test-tag-requesters-btn" class="btn btn-secondary" style="padding: 0.75rem 1rem; margin: 0; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                             <i class="bi bi-at"></i> <span data-i18n="config.test_tag_requesters">Test Requester Tag</span>
                           </button>
@@ -819,12 +819,12 @@
                           Full workflow test: checks Jellyfin is reachable, that a title is in your Jellyfin library, that the webhook endpoint accepts your secret, and that a requester is notified (PM and/or channel tag, per your settings).
                         </div>
                         <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                          <input type="text" id="test-workflow-tmdb-id" placeholder="TMDB ID (e.g. 157336)" style="flex: 1; min-width: 160px;" />
+                          <input type="text" id="test-workflow-tmdb-id" placeholder="TMDB ID (e.g. 157336)" data-i18n="config.test_tmdb_id_placeholder" data-i18n-attr="placeholder" style="flex: 1; min-width: 160px;" />
                           <select id="test-workflow-media-type" style="min-width: 110px;">
-                            <option value="movie">Movie</option>
-                            <option value="tv">TV</option>
+                            <option value="movie" data-i18n="config.test_media_movie">Movie</option>
+                            <option value="tv" data-i18n="config.test_media_tv">TV</option>
                           </select>
-                          <input type="text" id="test-workflow-user-id" placeholder="Discord user ID (optional)" style="flex: 1; min-width: 200px;" />
+                          <input type="text" id="test-workflow-user-id" placeholder="Discord user ID (optional)" data-i18n="config.test_user_id_placeholder" data-i18n-attr="placeholder" style="flex: 1; min-width: 200px;" />
                           <button type="button" id="test-workflow-btn" class="btn btn-secondary" style="padding: 0.75rem 1rem; margin: 0; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                             <i class="bi bi-check2-circle"></i> <span data-i18n="config.test_workflow">Run Workflow Test</span>
                           </button>
