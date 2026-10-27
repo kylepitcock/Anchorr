@@ -88,7 +88,7 @@ class JellyfinPoller {
       const baseUrl = process.env.JELLYFIN_BASE_URL;
       const serverId = process.env.JELLYFIN_SERVER_ID;
 
-      logger.info("🔍 Polling Jellyfin for recently added items...");
+      logger.debug("🔍 Polling Jellyfin for recently added items...");
 
       const { libraries, libraryIds, libraryIdMap } = await fetchLibraryMap();
 
@@ -99,38 +99,31 @@ class JellyfinPoller {
         if (lib.ItemId !== lib.CollectionId) libraryObjectMap.set(lib.ItemId, lib);
       }
 
-      logger.info(
+      logger.debug(
         `📚 Found ${libraries.length} libraries: ${libraries.map((l) => l.Name).join(", ")}`
       );
-      logger.info(
+      logger.debug(
         `📚 Virtual Folder IDs: ${libraries.map((l) => `${l.Name}=${l.ItemId}`).join(", ")}`
       );
-      logger.info(
+      logger.debug(
         `📚 Collection IDs: ${libraries.map((l) => `${l.Name}=${l.CollectionId || l.ItemId}`).join(", ")}`
       );
 
       const { items } = await jellyfinApi.fetchRecentlyAdded(apiKey, baseUrl, 50);
 
       if (items.length === 0) {
-        logger.info("No recently added items found");
+        logger.debug("No recently added items found");
         return;
       }
 
-      logger.info(`📦 Found ${items.length} recently added items`);
+      logger.debug(`📦 Found ${items.length} recently added items`);
 
       // Log first few items for debugging
       items.slice(0, 3).forEach((item) => {
-        logger.info(
+        logger.debug(
           `  - ${item.Type}: ${item.Name} (ID: ${item.Id}, ParentId: ${item.ParentId})`
         );
       });
-
-      // Debug: Log full first item to see what fields we have
-      if (items.length > 0) {
-        logger.info(
-          `🔍 DEBUG - First item full data: ${JSON.stringify(items[0], null, 2)}`
-        );
-      }
 
       // Get notification type filters
       const notifyMovies = process.env.JELLYFIN_NOTIFY_MOVIES !== "false";
@@ -141,8 +134,10 @@ class JellyfinPoller {
       const libraryChannels = getLibraryChannels();
       const defaultChannelId = process.env.JELLYFIN_CHANNEL_ID;
 
-      logger.info(`📚 Library channels configured: ${JSON.stringify(libraryChannels)}`);
-      logger.info(`📢 Default channel: ${defaultChannelId}`);
+      logger.debug(`📚 Library channels configured: ${JSON.stringify(libraryChannels)}`);
+      logger.debug(`📢 Default channel: ${defaultChannelId}`);
+
+      let dedupSkipped = 0;
 
       for (const item of items) {
         const itemId = item.Id;
@@ -160,7 +155,8 @@ class JellyfinPoller {
         }
 
         if (deduplicator.checkAndRecord(item)) {
-          logger.info(`⏭️ Skipping ${itemType} "${item.Name}" - already notified recently (identity dedup)`);
+          logger.debug(`⏭️ Skipping ${itemType} "${item.Name}" - already notified recently (identity dedup)`);
+          dedupSkipped++;
           continue;
         }
 
@@ -214,6 +210,10 @@ class JellyfinPoller {
         } catch (err) {
           logger.error(`Failed to send notification for ${itemId}:`, err);
         }
+      }
+
+      if (dedupSkipped > 0) {
+        logger.debug(`⏭️ Skipped ${dedupSkipped}/${items.length} items - already notified recently (identity dedup)`);
       }
 
       // Cleanup old deduplicator entries
