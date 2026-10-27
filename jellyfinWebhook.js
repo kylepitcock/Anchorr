@@ -912,9 +912,20 @@ export async function handleJellyfinWebhook(req, res, client, pendingRequests, o
     // Check if this is a test notification
     const isTestNotification = data.ItemId && (data.ItemId.startsWith("test-") || data.ItemId.startsWith("batch-"));
 
-    // Record real items in the shared seen-items store so the polling fallback
-    // doesn't announce them a second time. Recording only; never skips the webhook.
-    if (!isTestNotification) deduplicator.checkAndRecord(data);
+    // Shared seen-items store: the library seed marks everything that already
+    // existed, and the poller/WebSocket record what they announce. A hit means
+    // a re-add of known content (e.g. a Radarr/Sonarr quality upgrade replacing
+    // the file), not new media, so skip it. A miss records the item so the
+    // polling fallback doesn't announce it a second time.
+    if (!isTestNotification && deduplicator.checkAndRecord(data)) {
+      logger.info(
+        `⏭️ Skipping ${data.ItemType} "${data.Name}" - already in library (identity dedup)`
+      );
+      if (res) {
+        return res.status(200).send(`OK: ${data.Name} already in library, notification skipped.`);
+      }
+      return;
+    }
 
     // If no library ID in webhook, use advanced detection (traverse parent chain)
     // Skip library detection for test notifications
