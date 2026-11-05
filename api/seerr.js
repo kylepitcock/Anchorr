@@ -227,16 +227,29 @@ export async function checkMediaStatus(
 }
 
 /**
- * Get the Seerr user IDs that have requested a title.
+ * Keep only requests created at or after sinceMs. A request with no readable
+ * createdAt predates anything we can vouch for, so it is dropped.
+ */
+function requestsSince(requests, sinceMs) {
+  const list = requests || [];
+  if (!sinceMs) return list;
+  return list.filter((r) => {
+    const created = Date.parse(r?.createdAt);
+    return Number.isFinite(created) && created >= sinceMs;
+  });
+}
+
+/**
+ * Get the Seerr user IDs that have requested a title (since sinceMs, if given).
  * @returns {Promise<string[]>} Seerr user IDs (empty if none or title unknown)
  */
-export async function fetchMediaRequesterIds(tmdbId, mediaType, seerrUrl, apiKey) {
+export async function fetchMediaRequesterIds(tmdbId, mediaType, seerrUrl, apiKey, sinceMs = 0) {
   try {
     const response = await axios.get(
       `${normalizeApiUrl(seerrUrl)}/${mediaType === "movie" ? "movie" : "tv"}/${tmdbId}`,
       { headers: { "X-Api-Key": apiKey }, timeout: TIMEOUTS.SEERR_API }
     );
-    const requests = response.data?.mediaInfo?.requests || [];
+    const requests = requestsSince(response.data?.mediaInfo?.requests, sinceMs);
     return [...new Set(requests.map((r) => r?.requestedBy?.id).filter((id) => id != null).map(String))];
   } catch (err) {
     logger.warn(`Could not fetch requesters for ${mediaType} ${tmdbId}: ${err?.message || err}`);
@@ -245,16 +258,16 @@ export async function fetchMediaRequesterIds(tmdbId, mediaType, seerrUrl, apiKey
 }
 
 /**
- * Whether a title has been requested in Seerr (by anyone).
+ * Whether a title has been requested in Seerr (by anyone) at or after sinceMs.
  * @returns {Promise<boolean|null>} true/false, or null if Seerr could not be reached
  */
-export async function isMediaRequested(tmdbId, mediaType, seerrUrl, apiKey) {
+export async function isMediaRequested(tmdbId, mediaType, seerrUrl, apiKey, sinceMs = 0) {
   try {
     const response = await axios.get(
       `${normalizeApiUrl(seerrUrl)}/${mediaType === "movie" ? "movie" : "tv"}/${tmdbId}`,
       { headers: { "X-Api-Key": apiKey }, timeout: TIMEOUTS.SEERR_API }
     );
-    return (response.data?.mediaInfo?.requests || []).length > 0;
+    return requestsSince(response.data?.mediaInfo?.requests, sinceMs).length > 0;
   } catch (err) {
     logger.warn(`Could not check requests for ${mediaType} ${tmdbId}: ${err?.message || err}`);
     return null;

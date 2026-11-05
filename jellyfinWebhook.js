@@ -208,6 +208,11 @@ async function processAndSendNotification(
   // We need to fetch details from TMDB to get the backdrop
   const tmdbId = data.Provider_tmdb;
 
+  // An episode's/season's own Provider_tmdb is not the show's TMDB id. Requests
+  // are tracked and looked up by the show's id, so resolve it from the series.
+  const isShowPart = ItemType === "Episode" || ItemType === "Season";
+  const requestTmdbId = isShowPart ? await resolveSeriesTmdbId(SeriesId) : tmdbId;
+
   const testPrefix = isTestNotif ? "[TEST NOTIFICATION] " : "";
 
   logger.info(
@@ -233,12 +238,12 @@ async function processAndSendNotification(
   let requestKey = null;
   let requestChannelId;
 
-  if (notifyEnabled && tmdbId && pendingRequests) {
-    const movieKey = `${tmdbId}-movie`;
-    const tvKey = `${tmdbId}-tv`;
+  if (notifyEnabled && requestTmdbId && pendingRequests) {
+    const movieKey = `${requestTmdbId}-movie`;
+    const tvKey = `${requestTmdbId}-tv`;
 
     logger.debug(
-      `Checking pending requests. notifyEnabled=${notifyEnabled}, tmdbId=${tmdbId}`
+      `Checking pending requests. notifyEnabled=${notifyEnabled}, tmdbId=${requestTmdbId}`
     );
     logger.debug(`Pending requests keys:`, Array.from(pendingRequests.keys()));
 
@@ -249,7 +254,7 @@ async function processAndSendNotification(
       pendingRequests.delete(movieKey);
       if (onPendingRequestsChanged) onPendingRequestsChanged();
       logger.info(
-        `Found ${usersToNotify.length} users to notify for movie ${tmdbId}`
+        `Found ${usersToNotify.length} users to notify for movie ${requestTmdbId}`
       );
     } else if (
       (ItemType === "Series" ||
@@ -263,36 +268,35 @@ async function processAndSendNotification(
       pendingRequests.delete(tvKey);
       if (onPendingRequestsChanged) onPendingRequestsChanged();
       logger.info(
-        `Found ${usersToNotify.length} users to notify for TV show ${tmdbId}`
+        `Found ${usersToNotify.length} users to notify for TV show ${requestTmdbId}`
       );
     } else {
-      logger.debug(`No matching pending requests found for ${tmdbId}`);
+      logger.debug(`No matching pending requests found for ${requestTmdbId}`);
     }
   } else {
     logger.debug(
-      `Notification check skipped: notifyEnabled=${notifyEnabled}, tmdbId=${tmdbId}, hasPendingRequests=${!!pendingRequests}`
+      `Notification check skipped: notifyEnabled=${notifyEnabled}, tmdbId=${requestTmdbId}, hasPendingRequests=${!!pendingRequests}`
     );
   }
 
-  // Optionally skip titles nobody requested. Seerr is the source of truth (a
-  // series stays "requested" after its pending entry is consumed). If Seerr
-  // can't be reached or the title can't be identified, send the notification.
+  // Optionally skip titles nobody requested. Only requests made since
+  // JELLYFIN_REQUESTS_SINCE count, so titles requested (and fulfilled) long ago
+  // never notify again when a file is upgraded or re-added. If Seerr can't be
+  // reached, send the notification; an unidentifiable title is skipped.
+  const requestsSinceMs = Number(process.env.JELLYFIN_REQUESTS_SINCE) || 0;
   if (process.env.JELLYFIN_ONLY_REQUESTED === "true" && !isTestNotif) {
-    const isShowPart = ItemType === "Episode" || ItemType === "Season";
-    // An episode's/season's own Provider_tmdb is not the show's TMDB id, so
-    // resolve the show's id from its Jellyfin series item.
-    const checkTmdbId = isShowPart ? await resolveSeriesTmdbId(SeriesId) : tmdbId;
+    const checkTmdbId = requestTmdbId;
     let requested = usersToNotify.length > 0;
 
     if (!requested && !checkTmdbId) {
-      logger.warn(`[ONLY_REQUESTED] Could not identify TMDB id for ${data.SeriesName || Name} (${ItemType}); sending notification`);
-      requested = true;
+      logger.warn(`[ONLY_REQUESTED] Could not identify TMDB id for ${data.SeriesName || Name} (${ItemType}); skipping notification`);
     } else if (!requested && process.env.SEERR_URL && process.env.SEERR_API_KEY) {
       const result = await isMediaRequested(
         checkTmdbId,
         ItemType === "Movie" ? "movie" : "tv",
         getSeerrApiUrl(process.env.SEERR_URL),
-        process.env.SEERR_API_KEY
+        process.env.SEERR_API_KEY,
+        requestsSinceMs
       );
       logger.info(`[ONLY_REQUESTED] ${data.SeriesName || Name} (${ItemType}, tmdb ${checkTmdbId}): requested=${result}`);
       requested = result !== false;
@@ -303,18 +307,19 @@ async function processAndSendNotification(
     }
   }
 
-  // Requests made before tagging existed (or outside the bot) aren't tracked
-  // locally, so ask Seerr who requested the title and map them to Discord users.
+  // Requests made outside the bot aren't tracked locally, so ask Seerr who
+  // requested the title since the cutoff and map them to Discord users.
   let tagUserIds = usersToNotify;
-  if (tagEnabled && tmdbId) {
+  if (tagEnabled && requestTmdbId) {
     const mediaType = ItemType === "Movie" ? "movie" : "tv";
-    const seerrKey = `${tmdbId}-${mediaType}`;
+    const seerrKey = `${requestTmdbId}-${mediaType}`;
     if (!requestKey && !taggedRequests.has(seerrKey) && process.env.SEERR_URL && process.env.SEERR_API_KEY) {
       const seerrIds = await fetchMediaRequesterIds(
-        tmdbId,
+        requestTmdbId,
         mediaType,
         getSeerrApiUrl(process.env.SEERR_URL),
-        process.env.SEERR_API_KEY
+        process.env.SEERR_API_KEY,
+        requestsSinceMs
       );
       const discordIds = getUserMappings()
         .filter((m) => seerrIds.includes(String(m.seerrUserId)))

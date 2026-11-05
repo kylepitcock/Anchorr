@@ -649,19 +649,28 @@ export async function fetchAllLibraryItems(apiKey, baseUrl, parentId) {
  * @returns {Promise<Object|null>} Item details or null if failed
  */
 export async function fetchItemDetails(itemId, apiKey, baseUrl) {
+  const root = baseUrl.replace(/\/$/, "");
+  const headers = jellyfinAuthHeaders(apiKey);
   try {
-    const url = `${baseUrl.replace(/\/$/, "")}/Items/${itemId}`;
-    const response = await axios.get(url, {
-      headers: jellyfinAuthHeaders(apiKey),
-      timeout: 5000,
-    });
-
+    const response = await axios.get(`${root}/Items/${itemId}`, { headers, timeout: 5000 });
     return response.data;
   } catch (err) {
-    logger.warn(
-      `Failed to fetch item details for ${itemId}:`,
-      err?.message || err
-    );
+    // Newer Jellyfin servers no longer serve GET /Items/{id} without a user;
+    // the list endpoint filtered by Ids works everywhere.
+    try {
+      const response = await axios.get(`${root}/Items`, {
+        headers,
+        params: { Ids: itemId, Fields: "ProviderIds,Overview,Genres,RunTimeTicks,ParentId,SeriesName,ProductionYear" },
+        timeout: 5000,
+      });
+      const item = response.data?.Items?.[0];
+      if (item) return item;
+      logger.warn(`Failed to fetch item details for ${itemId}: not found (${err?.message || err})`);
+    } catch (fallbackErr) {
+      logger.warn(
+        `Failed to fetch item details for ${itemId}: ${err?.message || err}; fallback: ${fallbackErr?.message || fallbackErr}`
+      );
+    }
     return null;
   }
 }

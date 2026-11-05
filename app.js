@@ -36,6 +36,7 @@ import {
   CONFIG_PATH,
   readConfig,
   writeConfig,
+  updateConfig,
   loadConfigToEnv,
   getUserMappings,
 } from "./utils/configFile.js";
@@ -1383,6 +1384,16 @@ function startServer() {
       }
     } catch (e) {
       logger.error("Error during auto-start check:", e?.message || e);
+    }
+
+    // Only requests made from this point on may trigger "now available" notices
+    // or tagging; set once, the first time the bot starts with this behavior.
+    if (!process.env.JELLYFIN_REQUESTS_SINCE) {
+      const since = String(Date.now());
+      if (updateConfig({ JELLYFIN_REQUESTS_SINCE: since })) {
+        process.env.JELLYFIN_REQUESTS_SINCE = since;
+        logger.info(`Requests made before ${new Date(Number(since)).toISOString()} will not trigger notifications`);
+      }
     }
 
     // One-time library seed: pre-populate the dedup store with everything
